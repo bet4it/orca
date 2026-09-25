@@ -1,0 +1,83 @@
+name: Build Linux AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'fix/linux-ime-*'
+
+concurrency:
+  group: build-appimage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_appimage:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-linux-
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      - name: Build package inputs
+        run: |
+          status=0
+          pnpm run build:cli || status=1
+
+          scripts=(build:relay build:electron-vite:parallel)
+          pids=()
+          for script in "${scripts[@]}"; do
+            pnpm run "$script" &
+            pids+=("$!")
+          done
+
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
+
+      - name: Project web client from renderer build
+        run: pnpm run build:web-from-renderer
+
+      - name: Build mobile web bundle
+        run: pnpm run build:mobile-web
+
+      - name: Build native components
+        run: pnpm run build:native
+
+      - name: Install Linux package tooling
+        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+
+      - name: Package AppImage
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: >-
+          pnpm exec electron-builder --config config/electron-builder.config.cjs
+          --linux AppImage --x64 --publish never
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: orca-linux.AppImage
+          path: dist/*.AppImage
+          if-no-files-found: error
