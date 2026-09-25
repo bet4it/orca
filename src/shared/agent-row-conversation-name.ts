@@ -6,6 +6,7 @@
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
+import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
 import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
@@ -35,7 +36,8 @@ const FALLBACK_TAB_TITLE_LOWER = 'agent'
 
 const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> = {
   claude: ['claude code'],
-  gemini: ['gemini cli']
+  gemini: ['gemini cli'],
+  antigravity: ['agy']
 }
 
 const STATUS_WITH_CONTEXT_RE = /^(?:ready|idle|done)(?:\s+\([^)]*\))?$/i
@@ -69,6 +71,24 @@ function isAgentIdentityStatusTitle(
   )
 }
 
+function isAgentCommandLineTitle(
+  title: string,
+  agentType: AgentType | null | undefined
+): boolean {
+  const recognized = recognizeAgentProcessFromCommandLine(title)
+  if (!recognized) {
+    return false
+  }
+  if (agentType) {
+    return (
+      recognized.agent === agentType ||
+      AGENT_IDENTITY_ALIASES_LOWER[agentType]?.includes(recognized.processName.toLowerCase()) ===
+        true
+    )
+  }
+  return true
+}
+
 function isCwdLikeTitle(title: string): boolean {
   // Hook-less agents over SSH surface spinner+cwd titles (#8711); once the
   // spinner is stripped, what remains is a path, not a conversation name.
@@ -94,6 +114,7 @@ function conversationNameFromLiveTitle(
     SYNTHETIC_STATUS_TITLES_LOWER.has(lower) ||
     lower === FALLBACK_TAB_TITLE_LOWER ||
     isAgentIdentityStatusTitle(lower, agentType, agentTypeLabelLower) ||
+    isAgentCommandLineTitle(stripped, agentType) ||
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
     isClaudeManagementTitle(stripped) ||
