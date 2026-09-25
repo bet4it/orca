@@ -44,6 +44,18 @@ const PHYSICAL_ASCII_LETTER_CODE = /^Key[A-Z]$/
 // and because the digit row moves on AZERTY, Dvorak and Colemak while `Digit*`
 // does not.
 const PHYSICAL_PICK_ENDING_CODE = /^(?:Space|Enter|NumpadEnter|Escape|Digit[0-9]|Numpad[0-9])$/
+
+function isPickEndingEvent(event: XtermBypassEvent): boolean {
+  if (event.code !== undefined && PHYSICAL_PICK_ENDING_CODE.test(event.code)) {
+    return true
+  }
+  return (
+    event.key === ' ' ||
+    event.key === 'Enter' ||
+    event.key === 'Escape' ||
+    isPlainAsciiDigitKey(event)
+  )
+}
 const physicalKeyTrackers = new WeakMap<
   EventTarget,
   TerminalImeLinuxPhysicalKeyTracker & { users: number }
@@ -219,22 +231,21 @@ export function createTerminalImeLinuxCandidateState(
       if (event.type === 'keydown') {
         if (isImeOwnedLetterKeydown(event)) {
           imeOwnedPreeditUntil = at + IME_OWNED_PREEDIT_WINDOW_MS
+        } else if (isPickEndingEvent(event)) {
+          // A commit or cancel means the engine or user ended the picking round.
+          imeOwnedPreeditUntil = 0
+          candidateDigitUntil = 0
         } else if (isImeClaimedKeydown(event)) {
-          // A claimed commit or cancel means the engine ended the round itself.
-          // Ending the window here is what keeps a literal Space safe when an
-          // engine opens a composition session and never closes it.
+          // Why refresh rather than arm: the IME also claims the keys that
+          // edit and page the preedit — Backspace, the arrows, `-`/`=` for
+          // the next candidate page. Treating those as unclaimed disarmed
+          // the window mid-pick and let the following selector through,
+          // but claiming them from cold would arm on a bare navigation key
+          // with no preedit behind it.
           imeOwnedPreeditUntil =
-            event.code !== undefined && PHYSICAL_PICK_ENDING_CODE.test(event.code)
-              ? 0
-              : // Why refresh rather than arm: the IME also claims the keys that
-                // edit and page the preedit — Backspace, the arrows, `-`/`=` for
-                // the next candidate page. Treating those as unclaimed disarmed
-                // the window mid-pick and let the following selector through,
-                // but claiming them from cold would arm on a bare navigation key
-                // with no preedit behind it.
-                imeOwnedPreeditUntil > at
-                ? at + IME_OWNED_PREEDIT_WINDOW_MS
-                : imeOwnedPreeditUntil
+            imeOwnedPreeditUntil > at
+              ? at + IME_OWNED_PREEDIT_WINDOW_MS
+              : imeOwnedPreeditUntil
         } else if (!isTerminalImeCandidateSelectionKeyEvent(event)) {
           imeOwnedPreeditUntil = 0
         }
@@ -260,6 +271,10 @@ export function createTerminalImeLinuxCandidateState(
       }
 
       if (event.type === 'keyup') {
+        if (isPickEndingEvent(event)) {
+          candidateDigitUntil = 0
+          imeOwnedPreeditUntil = 0
+        }
         const matchingPlainLetterKeydown = event.code
           ? pendingPlainLetterKeydownsByCode.delete(event.code)
           : false

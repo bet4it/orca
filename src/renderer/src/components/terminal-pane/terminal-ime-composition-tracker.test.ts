@@ -152,6 +152,37 @@ describe('installTerminalImeCompositionTracker', () => {
       harness.input('insertText')
       expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
     })
+
+    it('deactivates candidate guard during live composition once a candidate key is consumed', () => {
+      const harness = installTracker()
+      harness.composition('compositionstart', '')
+      harness.composition('compositionupdate', 'ni')
+      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(true)
+      harness.tracker.consumeCandidateKey()
+      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
+      expect(harness.tracker.isActive()).toBe(true)
+    })
+
+    it('does not arm post-composition window if a candidate key was already consumed during composition', () => {
+      const harness = installTracker()
+      harness.composition('compositionstart', '')
+      harness.composition('compositionupdate', '你')
+      harness.composition('compositionupdate', '')
+      harness.tracker.consumeCandidateKey()
+      harness.composition('compositionend', '你')
+      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
+    })
+
+    it('clears the post-composition window immediately when a trailing candidate key is consumed', () => {
+      const harness = installTracker()
+      harness.composition('compositionstart', '')
+      harness.composition('compositionupdate', '你')
+      harness.composition('compositionupdate', '')
+      harness.composition('compositionend', '你')
+      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(true)
+      harness.tracker.consumeCandidateKey()
+      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
+    })
   })
 
   it('handles a missing terminal element', () => {

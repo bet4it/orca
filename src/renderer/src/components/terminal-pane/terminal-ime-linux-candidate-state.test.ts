@@ -142,6 +142,44 @@ describe('createTerminalImeLinuxCandidateState', () => {
     ).toBe(false)
   })
 
+  it('cancels the orphan guard when a Space keyup intervenes', () => {
+    let time = 100
+    const state = createTerminalImeLinuxCandidateState(() => time)
+    const orphanKeyup = event({ type: 'keyup', key: 'a', code: 'KeyA' })
+    state.observeKeyboardEvent(orphanKeyup, state.classifyKeyboardEvent(orphanKeyup))
+    time += 10
+    expect(
+      state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1' })).candidateDigitGuardActive
+    ).toBe(true)
+
+    const spaceKeyup = event({ type: 'keyup', key: ' ', code: 'Space' })
+    state.observeKeyboardEvent(spaceKeyup, state.classifyKeyboardEvent(spaceKeyup))
+    time += 10
+
+    expect(
+      state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1' })).candidateDigitGuardActive
+    ).toBe(false)
+  })
+
+  it('cancels the orphan guard when a Space keydown intervenes', () => {
+    let time = 100
+    const state = createTerminalImeLinuxCandidateState(() => time)
+    const orphanKeyup = event({ type: 'keyup', key: 'a', code: 'KeyA' })
+    state.observeKeyboardEvent(orphanKeyup, state.classifyKeyboardEvent(orphanKeyup))
+    time += 10
+    expect(
+      state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1' })).candidateDigitGuardActive
+    ).toBe(true)
+
+    const spaceKeydown = event({ key: ' ', code: 'Space' })
+    state.observeKeyboardEvent(spaceKeydown, state.classifyKeyboardEvent(spaceKeydown))
+    time += 10
+
+    expect(
+      state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1' })).candidateDigitGuardActive
+    ).toBe(false)
+  })
+
   it('resets missed releases on blur and removes the listener on dispose', () => {
     let time = 100
     const terminalElement = new EventTarget()

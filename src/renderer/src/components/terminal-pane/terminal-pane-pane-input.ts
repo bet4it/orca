@@ -122,11 +122,20 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       if (shouldPreventDefaultTerminalImeCandidateKey(event, imeKeyboardOptions)) {
         event.preventDefault()
         armTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event, now)
+        imeCompositionTracker.consumeCandidateKey()
+        linuxImeCandidateState?.resetCandidateGuard()
+      } else if (event.type === 'keyup') {
+        imeCompositionTracker.consumeCandidateKey()
+        linuxImeCandidateState?.resetCandidateGuard()
       }
       observeLinuxCandidateEvent()
       return false
     }
     clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
+    if (event.type === 'keyup' && (event.key === ' ' || event.code === 'Space')) {
+      imeCompositionTracker.consumeCandidateKey()
+      linuxImeCandidateState?.resetCandidateGuard()
+    }
     if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(event)) {
       pendingTerminalInterruptKeyup = false
       observeLinuxCandidateEvent()

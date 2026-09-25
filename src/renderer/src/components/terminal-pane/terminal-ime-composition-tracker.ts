@@ -10,6 +10,8 @@ export type TerminalImeCompositionTracker = IDisposable & {
    *  syllable as literal text instead of picking a candidate. Expires with the
    *  same staleness window as the other guards. */
   isHangulPreedit: () => boolean
+  /** Records that candidate selection was consumed for this preedit round. */
+  consumeCandidateKey: () => void
 }
 
 // Jamo, compatibility jamo, extended jamo, and precomposed syllables — every
@@ -34,6 +36,7 @@ export function installTerminalImeCompositionTracker(
   let lastCompositionEventAt: number | null = null
   let compositionEndedAt: number | null = null
   let sawEmptyCompositionUpdate = false
+  let candidateKeyConsumed = false
   // Why the preedit and not compositionend data: a Pinyin IME's preedit is the
   // Latin spelling it is picking candidates for, while its compositionend data
   // is the committed Han text. Reading the commit would misclassify Pinyin.
@@ -53,6 +56,9 @@ export function installTerminalImeCompositionTracker(
     at - lastCompositionEventAt <= TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS
 
   const isCandidateKeyGuardActive = (): boolean => {
+    if (candidateKeyConsumed) {
+      return false
+    }
     const at = now()
     if (isActiveAt(at)) {
       return true
@@ -63,11 +69,17 @@ export function installTerminalImeCompositionTracker(
     )
   }
 
+  const consumeCandidateKey = (): void => {
+    candidateKeyConsumed = true
+    compositionEndedAt = null
+  }
+
   if (!terminalElement) {
     return {
       isActive: () => active,
       isCandidateKeyGuardActive,
       isHangulPreedit: () => isHangulPreeditAt(now()),
+      consumeCandidateKey,
       dispose: () => undefined
     }
   }
@@ -77,6 +89,7 @@ export function installTerminalImeCompositionTracker(
     lastCompositionEventAt = now()
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
+    candidateKeyConsumed = false
     // Why safe: the following compositionupdate re-reads the preedit script.
     hangulPreedit = false
   }
@@ -94,13 +107,16 @@ export function installTerminalImeCompositionTracker(
     }
     hangulPreedit = HANGUL_PREEDIT_PATTERN.test(event.data)
     active = true
+    candidateKeyConsumed = false
   }
   const handleCompositionEnd = (): void => {
     active = false
     // Why: only Sogou/fcitx-style empty updates prove a trailing plain
     // Space/digit is likely IME-owned; broad post-end guards drop real typing.
-    compositionEndedAt = sawEmptyCompositionUpdate ? now() : null
+    // If a candidate key was already consumed, there is no trailing selector.
+    compositionEndedAt = sawEmptyCompositionUpdate && !candidateKeyConsumed ? now() : null
     sawEmptyCompositionUpdate = false
+    candidateKeyConsumed = false
   }
   const handleInput = (event: Event): void => {
     if (event instanceof InputEvent && event.inputType === 'insertCompositionText') {
@@ -111,12 +127,14 @@ export function installTerminalImeCompositionTracker(
     // the post-end window would swallow a legitimate Space/digit.
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
+    candidateKeyConsumed = false
   }
   const markInactive = (): void => {
     active = false
     lastCompositionEventAt = null
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
+    candidateKeyConsumed = false
     hangulPreedit = false
   }
 
@@ -130,6 +148,7 @@ export function installTerminalImeCompositionTracker(
     isActive: () => isActiveAt(now()),
     isCandidateKeyGuardActive,
     isHangulPreedit: () => isHangulPreeditAt(now()),
+    consumeCandidateKey,
     dispose: () => {
       terminalElement.removeEventListener('compositionstart', markActive, true)
       terminalElement.removeEventListener('compositionupdate', updateComposition, true)

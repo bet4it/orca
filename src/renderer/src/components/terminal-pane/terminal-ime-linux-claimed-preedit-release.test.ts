@@ -212,4 +212,48 @@ describe('a composition session that never ends', () => {
     state.dispose()
     element.remove()
   })
+
+  it.each(['Space', 'Enter', 'NumpadEnter', 'Escape', 'Digit2', 'Numpad2'])(
+    'still frees the next literal digit after a claimed %s',
+    (selectorCode) => {
+      const { element, state, advance } = installOnElement()
+      const feed = (keyboardEvent: XtermBypassEvent): void => {
+        state.observeKeyboardEvent(keyboardEvent, state.classifyKeyboardEvent(keyboardEvent))
+      }
+
+      feed(event({ key: 'Process', code: 'KeyN', keyCode: 229 }))
+      element.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }))
+      advance(40)
+      feed(event({ key: 'Process', code: 'KeyI', keyCode: 229 }))
+      element.dispatchEvent(
+        new InputEvent('input', { inputType: 'insertCompositionText', data: 'ni' })
+      )
+      advance(40)
+      feed(event({ key: 'Process', code: selectorCode, keyCode: 229 }))
+      advance(40)
+
+      expect(claimsDigit(state)).toBe(false)
+      state.dispose()
+    }
+  )
+
+  it.each(['Space', 'Enter', 'Escape'])(
+    'still frees the next literal digit after a plain %s',
+    (selectorCode) => {
+      const { state, advance } = installOnElement()
+      armWithOrphanLetter(state)
+      advance(40)
+      expect(claimsDigit(state)).toBe(true)
+
+      const key = selectorCode === 'Space' ? ' ' : selectorCode
+      const feed = (keyboardEvent: XtermBypassEvent): void => {
+        state.observeKeyboardEvent(keyboardEvent, state.classifyKeyboardEvent(keyboardEvent))
+      }
+      feed(event({ key, code: selectorCode }))
+      advance(40)
+
+      expect(claimsDigit(state)).toBe(false)
+      state.dispose()
+    }
+  )
 })
