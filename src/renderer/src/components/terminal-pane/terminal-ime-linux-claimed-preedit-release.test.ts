@@ -50,6 +50,18 @@ function claimsSpace(state: ReturnType<typeof installTerminalImeLinuxCandidateSt
     .imeOwnedPreeditGuardActive
 }
 
+function armWithOrphanLetter(
+  state: ReturnType<typeof installTerminalImeLinuxCandidateState>
+): void {
+  const keyup = event({ type: 'keyup', key: 'a', code: 'KeyA', keyCode: 65 })
+  state.observeKeyboardEvent(keyup, state.classifyKeyboardEvent(keyup))
+}
+
+function claimsDigit(state: ReturnType<typeof installTerminalImeLinuxCandidateState>): boolean {
+  return state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1', keyCode: 49 }))
+    .candidateDigitGuardActive
+}
+
 describe('claimed-preedit window release wiring', () => {
   it.each(['compositionstart', 'compositionend'])('releases the window on %s', (eventType) => {
     const { element, state, advance } = installOnElement()
@@ -58,6 +70,29 @@ describe('claimed-preedit window release wiring', () => {
     expect(claimsSpace(state)).toBe(true)
     element.dispatchEvent(new CompositionEvent(eventType, { data: '你' }))
     expect(claimsSpace(state)).toBe(false)
+    state.dispose()
+  })
+
+  it.each(['compositionstart', 'compositionend'])(
+    'releases the orphan candidate digit window on %s',
+    (eventType) => {
+      const { element, state, advance } = installOnElement()
+      armWithOrphanLetter(state)
+      advance(40)
+      expect(claimsDigit(state)).toBe(true)
+      element.dispatchEvent(new CompositionEvent(eventType, { data: '你' }))
+      expect(claimsDigit(state)).toBe(false)
+      state.dispose()
+    }
+  )
+
+  it('releases the orphan candidate digit window on a commit that is not preedit text', () => {
+    const { element, state, advance } = installOnElement()
+    armWithOrphanLetter(state)
+    advance(40)
+    expect(claimsDigit(state)).toBe(true)
+    element.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: '你' }))
+    expect(claimsDigit(state)).toBe(false)
     state.dispose()
   })
 

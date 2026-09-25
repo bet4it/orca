@@ -289,7 +289,10 @@ export function installTerminalImeLinuxCandidateState(
   // Why: an input source that does open a composition session is already owned
   // by the composition-scoped guards, so the claimed-keydown window must stand
   // down at both boundaries rather than claim the same selector twice.
-  const releaseToCompositionSession = (): void => state.resetImeOwnedPreeditGuard()
+  const releaseToCompositionSession = (): void => {
+    state.resetImeOwnedPreeditGuard()
+    state.resetCandidateGuard()
+  }
   // Why: a commit that is not preedit text means the picking round is over and
   // the next Space or digit is literal terminal input again. A session-running
   // IME commits through `insertCompositionText` instead and is released by
@@ -300,6 +303,7 @@ export function installTerminalImeLinuxCandidateState(
       return
     }
     state.resetImeOwnedPreeditGuard()
+    state.resetCandidateGuard()
   }
   terminalElement?.addEventListener('blur', state.resetCandidateGuard, true)
   terminalElement?.addEventListener('compositionstart', releaseToCompositionSession, true)
