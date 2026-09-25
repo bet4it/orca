@@ -6,7 +6,10 @@
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import {
+  AGENT_IDENTITY_ALIASES_LOWER,
+  isAgentCommandLineTitle
+} from './agent-command-line-title'
 import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
@@ -33,12 +36,6 @@ const SYNTHETIC_STATUS_TITLES_LOWER: ReadonlySet<string> = new Set(
 // Why: retained rows without a live tab synthesize `title: 'Agent'`
 // (worktree-agent-row-fallback-tab.ts); it is a placeholder, not a name.
 const FALLBACK_TAB_TITLE_LOWER = 'agent'
-
-const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> = {
-  claude: ['claude code'],
-  gemini: ['gemini cli'],
-  antigravity: ['agy']
-}
 
 const STATUS_WITH_CONTEXT_RE = /^(?:ready|idle|done)(?:\s+\([^)]*\))?$/i
 const DEFAULT_TERMINAL_TITLE_RE = /^terminal \d+$/i
@@ -69,24 +66,6 @@ function isAgentIdentityStatusTitle(
       isIdentityStatusTitle(titleLower, identity)
     ) ?? false
   )
-}
-
-function isAgentCommandLineTitle(
-  title: string,
-  agentType: AgentType | null | undefined
-): boolean {
-  const recognized = recognizeAgentProcessFromCommandLine(title)
-  if (!recognized) {
-    return false
-  }
-  if (agentType) {
-    return (
-      recognized.agent === agentType ||
-      AGENT_IDENTITY_ALIASES_LOWER[agentType]?.includes(recognized.processName.toLowerCase()) ===
-        true
-    )
-  }
-  return true
 }
 
 function isCwdLikeTitle(title: string): boolean {
